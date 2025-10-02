@@ -75,7 +75,7 @@ func New() (*App, error) {
 	userRepo := repository.NewUserRepository(database)
 	userService := service.NewUserService(userRepo, tokenService, tokenCache)
 
-	handler := v1.NewHandler(userService)
+	handler := v1.NewHandler(userService, tokenService)
 	handler.InitRoutes(router)
 
 	server := &http.Server{

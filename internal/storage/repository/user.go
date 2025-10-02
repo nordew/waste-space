@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"errors"
-	"time"
 	"waste-space/internal/model"
 	apperrors "waste-space/pkg/errors"
 
@@ -19,10 +18,6 @@ type UserRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	List(ctx context.Context, limit, offset int) ([]*model.User, error)
 	Count(ctx context.Context) (int64, error)
-	UpdateLastLogin(ctx context.Context, id uuid.UUID) error
-	VerifyEmail(ctx context.Context, id uuid.UUID) error
-	VerifyPhone(ctx context.Context, id uuid.UUID) error
-	SetActive(ctx context.Context, id uuid.UUID, isActive bool) error
 }
 
 type userRepository struct {
@@ -119,69 +114,4 @@ func (r *userRepository) Count(ctx context.Context) (int64, error) {
 	}
 
 	return count, nil
-}
-
-func (r *userRepository) UpdateLastLogin(ctx context.Context, id uuid.UUID) error {
-	now := time.Now()
-	result := r.db.WithContext(ctx).
-		Model(&model.User{}).
-		Where("id = ?", id).
-		Update("last_login_at", now)
-	if result.Error != nil {
-		return apperrors.Internal("failed to update last login", result.Error)
-	}
-
-	if result.RowsAffected == 0 {
-		return apperrors.NotFound("user not found")
-	}
-
-	return nil
-}
-
-func (r *userRepository) VerifyEmail(ctx context.Context, id uuid.UUID) error {
-	result := r.db.WithContext(ctx).
-		Model(&model.User{}).
-		Where("id = ?", id).
-		Update("is_email_verified", true)
-	if result.Error != nil {
-		return apperrors.Internal("failed to verify email", result.Error)
-	}
-
-	if result.RowsAffected == 0 {
-		return apperrors.NotFound("user not found")
-	}
-
-	return nil
-}
-
-func (r *userRepository) VerifyPhone(ctx context.Context, id uuid.UUID) error {
-	result := r.db.WithContext(ctx).
-		Model(&model.User{}).
-		Where("id = ?", id).
-		Update("is_phone_verified", true)
-	if result.Error != nil {
-		return apperrors.Internal("failed to verify phone", result.Error)
-	}
-
-	if result.RowsAffected == 0 {
-		return apperrors.NotFound("user not found")
-	}
-
-	return nil
-}
-
-func (r *userRepository) SetActive(ctx context.Context, id uuid.UUID, isActive bool) error {
-	result := r.db.WithContext(ctx).
-		Model(&model.User{}).
-		Where("id = ?", id).
-		Update("is_active", isActive)
-	if result.Error != nil {
-		return apperrors.Internal("failed to set active status", result.Error)
-	}
-
-	if result.RowsAffected == 0 {
-		return apperrors.NotFound("user not found")
-	}
-
-	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"waste-space/pkg/auth"
 	apperrors "waste-space/pkg/errors"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -21,7 +22,13 @@ type UserService interface {
 	Login(ctx context.Context, req dto.LoginRequest) (*dto.LoginResponse, error)
 	RefreshToken(ctx context.Context, req dto.RefreshTokenRequest) (*dto.RefreshTokenResponse, error)
 	Logout(ctx context.Context, userID string, accessToken string) error
+	GetMe(ctx context.Context, userID string) (*dto.UserResponse, error)
 	GetByID(ctx context.Context, userID string) (*dto.UserResponse, error)
+	UpdateMe(ctx context.Context, userID string, req dto.UpdateUserRequest) (*dto.UserResponse, error)
+	UpdateEmail(ctx context.Context, userID string, req dto.UpdateEmailRequest) (*dto.UserResponse, error)
+	UpdatePhone(ctx context.Context, userID string, req dto.UpdatePhoneRequest) (*dto.UserResponse, error)
+	UpdatePassword(ctx context.Context, userID string, req dto.UpdatePasswordRequest) error
+	DeleteMe(ctx context.Context, userID string) error
 }
 
 type userService struct {
@@ -75,7 +82,9 @@ func (s *userService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 		return nil, apperrors.Internal("failed to cache refresh token", err)
 	}
 
-	if err := s.userRepo.UpdateLastLogin(ctx, user.ID); err != nil {
+	now := time.Now()
+	user.LastLoginAt = &now
+	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
 	}
 
@@ -122,12 +131,141 @@ func (s *userService) Logout(ctx context.Context, userID string, accessToken str
 	return nil
 }
 
+func (s *userService) GetMe(ctx context.Context, userID string) (*dto.UserResponse, error) {
+	return s.getUserByID(ctx, userID)
+}
+
 func (s *userService) GetByID(ctx context.Context, userID string) (*dto.UserResponse, error) {
-	user, err := s.userRepo.GetByEmail(ctx, userID)
+	return s.getUserByID(ctx, userID)
+}
+
+func (s *userService) getUserByID(ctx context.Context, userID string) (*dto.UserResponse, error) {
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, apperrors.BadRequest("invalid user ID")
+	}
+
+	user, err := s.userRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
 	response := user.ToResponse()
 	return &response, nil
+}
+
+func (s *userService) UpdateMe(ctx context.Context, userID string, req dto.UpdateUserRequest) (*dto.UserResponse, error) {
+	user, err := s.getUserForUpdate(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	s.applyUserUpdates(user, req)
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return nil, err
+	}
+
+	response := user.ToResponse()
+	return &response, nil
+}
+
+func (s *userService) UpdateEmail(ctx context.Context, userID string, req dto.UpdateEmailRequest) (*dto.UserResponse, error) {
+	user, err := s.getUserForUpdate(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	user.Email = req.Email
+	user.IsEmailVerified = false
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return nil, err
+	}
+
+	response := user.ToResponse()
+	return &response, nil
+}
+
+func (s *userService) UpdatePhone(ctx context.Context, userID string, req dto.UpdatePhoneRequest) (*dto.UserResponse, error) {
+	user, err := s.getUserForUpdate(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	user.PhoneNumber = req.PhoneNumber
+	user.IsPhoneVerified = false
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return nil, err
+	}
+
+	response := user.ToResponse()
+	return &response, nil
+}
+
+func (s *userService) UpdatePassword(ctx context.Context, userID string, req dto.UpdatePasswordRequest) error {
+	user, err := s.getUserForUpdate(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)); err != nil {
+		return apperrors.Unauthorized("invalid current password")
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return apperrors.Internal("failed to hash password", err)
+	}
+
+	user.PasswordHash = string(hashedPassword)
+
+	return s.userRepo.Update(ctx, user)
+}
+
+func (s *userService) DeleteMe(ctx context.Context, userID string) error {
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return apperrors.BadRequest("invalid user ID")
+	}
+
+	return s.userRepo.Delete(ctx, id)
+}
+
+func (s *userService) getUserForUpdate(ctx context.Context, userID string) (*model.User, error) {
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, apperrors.BadRequest("invalid user ID")
+	}
+
+	return s.userRepo.GetByID(ctx, id)
+}
+
+func (s *userService) applyUserUpdates(user *model.User, req dto.UpdateUserRequest) {
+	if req.FirstName != nil {
+		user.FirstName = *req.FirstName
+	}
+	if req.LastName != nil {
+		user.LastName = *req.LastName
+	}
+	if req.PhoneNumber != nil {
+		user.PhoneNumber = *req.PhoneNumber
+		user.IsPhoneVerified = false
+	}
+	if req.DateOfBirth != nil {
+		user.DateOfBirth = *req.DateOfBirth
+	}
+	if req.Address != nil {
+		user.Address = *req.Address
+	}
+	if req.City != nil {
+		user.City = *req.City
+	}
+	if req.State != nil {
+		user.State = *req.State
+	}
+	if req.ZipCode != nil {
+		user.ZipCode = *req.ZipCode
+	}
 }

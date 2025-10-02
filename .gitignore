@@ -28,4 +28,6 @@ temp/
 .tmp/
 
 docs/
-CLAUDE.md
+
+CLAUDE.MD
+postman_collection.json

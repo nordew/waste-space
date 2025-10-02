@@ -26,6 +26,19 @@ type UpdateUserRequest struct {
 	ZipCode     *string    `json:"zipCode,omitempty" validate:"omitempty,numeric"`
 }
 
+type UpdateEmailRequest struct {
+	Email string `json:"email" validate:"required,email"`
+}
+
+type UpdatePhoneRequest struct {
+	PhoneNumber string `json:"phoneNumber" validate:"required,e164"`
+}
+
+type UpdatePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword" validate:"required"`
+	NewPassword     string `json:"newPassword" validate:"required,min=8,max=72"`
+}
+
 type UserResponse struct {
 	ID              string     `json:"id"`
 	FirstName       string     `json:"firstName"`

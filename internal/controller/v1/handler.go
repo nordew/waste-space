@@ -1,7 +1,9 @@
 package v1
 
 import (
+	"waste-space/internal/middleware"
 	"waste-space/internal/service"
+	"waste-space/pkg/auth"
 
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -12,11 +14,15 @@ import (
 
 type Handler struct {
 	authController *AuthController
+	userController *UserController
+	tokenService   auth.TokenService
 }
 
-func NewHandler(userService service.UserService) *Handler {
+func NewHandler(userService service.UserService, tokenService auth.TokenService) *Handler {
 	return &Handler{
 		authController: NewAuthController(userService),
+		userController: NewUserController(userService),
+		tokenService:   tokenService,
 	}
 }
 
@@ -26,5 +32,6 @@ func (h *Handler) InitRoutes(router *gin.Engine) {
 	v1 := router.Group("/api/v1")
 	{
 		h.authController.initAuthRoutes(v1)
+		h.userController.initUserRoutes(v1, middleware.Auth(h.tokenService))
 	}
 }
