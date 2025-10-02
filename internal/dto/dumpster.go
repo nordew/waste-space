@@ -61,17 +61,63 @@ type DumpsterResponse struct {
 	UpdatedAt   time.Time     `json:"updatedAt"`
 }
 
+type DumpsterListRequest struct {
+	Page          int      `form:"page" validate:"omitempty,min=1"`
+	Limit         int      `form:"limit" validate:"omitempty,min=1,max=100"`
+	SortBy        string   `form:"sortBy" validate:"omitempty,oneof=price distance rating availability"`
+	Location      string   `form:"location"`
+	MaxPrice      *float64 `form:"maxPrice" validate:"omitempty,gt=0"`
+	Size          string   `form:"size" validate:"omitempty,oneof=small medium large extraLarge"`
+	AvailableNow  *bool    `form:"availableNow"`
+	MaxDistance   *float64 `form:"maxDistance" validate:"omitempty,gt=0"`
+}
+
 type DumpsterSearchRequest struct {
-	City        string   `json:"city"`
-	State       string   `json:"state"`
-	ZipCode     string   `json:"zipCode"`
-	MinPrice    *float64 `json:"minPrice,omitempty" validate:"omitempty,gte=0"`
-	MaxPrice    *float64 `json:"maxPrice,omitempty" validate:"omitempty,gte=0"`
-	Size        string   `json:"size" validate:"omitempty,oneof=small medium large extraLarge"`
-	IsAvailable *bool    `json:"isAvailable,omitempty"`
-	Latitude    *float64 `json:"latitude,omitempty" validate:"omitempty,latitude"`
-	Longitude   *float64 `json:"longitude,omitempty" validate:"omitempty,longitude"`
-	RadiusKm    *float64 `json:"radiusKm,omitempty" validate:"omitempty,gt=0"`
-	Limit       int      `json:"limit" validate:"omitempty,min=1,max=100"`
-	Offset      int      `json:"offset" validate:"omitempty,min=0"`
+	Query       string   `form:"q"`
+	City        string   `form:"city"`
+	State       string   `form:"state"`
+	ZipCode     string   `form:"zipCode"`
+	MinPrice    *float64 `form:"minPrice" validate:"omitempty,gte=0"`
+	MaxPrice    *float64 `form:"maxPrice" validate:"omitempty,gte=0"`
+	Size        string   `form:"size" validate:"omitempty,oneof=small medium large extraLarge"`
+	IsAvailable *bool    `form:"isAvailable"`
+	Page        int      `form:"page" validate:"omitempty,min=1"`
+	Limit       int      `form:"limit" validate:"omitempty,min=1,max=100"`
+}
+
+type NearbyDumpstersRequest struct {
+	Latitude    float64  `form:"lat" validate:"required,latitude"`
+	Longitude   float64  `form:"lng" validate:"required,longitude"`
+	MaxDistance *float64 `form:"maxDistance" validate:"omitempty,gt=0"`
+	Limit       int      `form:"limit" validate:"omitempty,min=1,max=100"`
+}
+
+type BookDumpsterRequest struct {
+	StartDate time.Time `json:"startDate" validate:"required"`
+	EndDate   time.Time `json:"endDate" validate:"required,gtfield=StartDate"`
+}
+
+type BookingResponse struct {
+	ID          string    `json:"id"`
+	DumpsterID  string    `json:"dumpsterId"`
+	UserID      string    `json:"userId"`
+	StartDate   time.Time `json:"startDate"`
+	EndDate     time.Time `json:"endDate"`
+	TotalPrice  float64   `json:"totalPrice"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+type AvailabilityResponse struct {
+	DumpsterID  string `json:"dumpsterId"`
+	IsAvailable bool   `json:"isAvailable"`
+	Message     string `json:"message,omitempty"`
+}
+
+type DumpsterListResponse struct {
+	Dumpsters  []DumpsterResponse `json:"dumpsters"`
+	Total      int64              `json:"total"`
+	Page       int                `json:"page"`
+	Limit      int                `json:"limit"`
+	TotalPages int                `json:"totalPages"`
 }

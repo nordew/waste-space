@@ -74,8 +74,10 @@ func New() (*App, error) {
 	tokenCache := cache.NewTokenCache(redisClient)
 	userRepo := repository.NewUserRepository(database)
 	userService := service.NewUserService(userRepo, tokenService, tokenCache)
+	dumpsterRepo := repository.NewDumpsterRepository(database)
+	dumpsterService := service.NewDumpsterService(dumpsterRepo)
 
-	handler := v1.NewHandler(userService, tokenService)
+	handler := v1.NewHandler(userService, dumpsterService, tokenService)
 	handler.InitRoutes(router)
 
 	server := &http.Server{
