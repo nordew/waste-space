@@ -84,7 +84,9 @@ func (r *dumpsterRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *dumpsterRepository) List(ctx context.Context, req dto.DumpsterListRequest) ([]*model.Dumpster, int64, error) {
+func (r *dumpsterRepository) List(
+	ctx context.Context,
+	req dto.DumpsterListRequest) ([]*model.Dumpster, int64, error) {
 	var dumpsters []*model.Dumpster
 	var total int64
 
@@ -133,7 +135,9 @@ func (r *dumpsterRepository) List(ctx context.Context, req dto.DumpsterListReque
 	return dumpsters, total, nil
 }
 
-func (r *dumpsterRepository) Search(ctx context.Context, req dto.DumpsterSearchRequest) ([]*model.Dumpster, int64, error) {
+func (r *dumpsterRepository) Search(
+	ctx context.Context,
+	req dto.DumpsterSearchRequest) ([]*model.Dumpster, int64, error) {
 	var dumpsters []*model.Dumpster
 	var total int64
 
@@ -191,7 +195,9 @@ func (r *dumpsterRepository) Search(ctx context.Context, req dto.DumpsterSearchR
 	return dumpsters, total, nil
 }
 
-func (r *dumpsterRepository) FindNearby(ctx context.Context, req dto.NearbyDumpstersRequest) ([]*model.Dumpster, error) {
+func (r *dumpsterRepository) FindNearby(
+	ctx context.Context,
+	req dto.NearbyDumpstersRequest) ([]*model.Dumpster, error) {
 	var dumpsters []*model.Dumpster
 
 	maxDistance := defaultNearbyDistance

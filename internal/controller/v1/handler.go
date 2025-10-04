@@ -16,14 +16,23 @@ type Handler struct {
 	authController     *AuthController
 	userController     *UserController
 	dumpsterController *DumpsterController
+	reviewController   *ReviewController
+	usageController    *UsageController
 	tokenService       auth.TokenService
 }
 
-func NewHandler(userService service.UserService, dumpsterService service.DumpsterService, tokenService auth.TokenService) *Handler {
+func NewHandler(
+	userService service.UserService,
+	dumpsterService service.DumpsterService,
+	reviewService service.ReviewService,
+	usageService service.UsageService,
+	tokenService auth.TokenService) *Handler {
 	return &Handler{
 		authController:     NewAuthController(userService),
 		userController:     NewUserController(userService),
 		dumpsterController: NewDumpsterController(dumpsterService),
+		reviewController:   NewReviewController(reviewService),
+		usageController:    NewUsageController(usageService),
 		tokenService:       tokenService,
 	}
 }
@@ -38,5 +47,7 @@ func (h *Handler) InitRoutes(router *gin.Engine) {
 		h.authController.initAuthRoutes(v1)
 		h.userController.initUserRoutes(v1, authMW)
 		h.dumpsterController.initDumpsterRoutes(v1, authMW)
+		h.reviewController.initReviewRoutes(v1, authMW)
+		h.usageController.initUsageRoutes(v1, authMW)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	apperrors "waste-space/pkg/errors"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 type DumpsterService interface {
@@ -27,15 +28,22 @@ type DumpsterService interface {
 
 type dumpsterService struct {
 	dumpsterRepo repository.DumpsterRepository
+	logger       *zap.Logger
 }
 
-func NewDumpsterService(dumpsterRepo repository.DumpsterRepository) DumpsterService {
+func NewDumpsterService(
+	dumpsterRepo repository.DumpsterRepository,
+	logger *zap.Logger) DumpsterService {
 	return &dumpsterService{
 		dumpsterRepo: dumpsterRepo,
+		logger:       logger,
 	}
 }
 
-func (s *dumpsterService) Create(ctx context.Context, ownerID string, req dto.CreateDumpsterRequest) (*dto.DumpsterResponse, error) {
+func (s *dumpsterService) Create(
+	ctx context.Context,
+	ownerID string,
+	req dto.CreateDumpsterRequest) (*dto.DumpsterResponse, error) {
 	ownerUUID, err := uuid.Parse(ownerID)
 	if err != nil {
 		return nil, apperrors.BadRequest("invalid owner ID")
@@ -44,6 +52,7 @@ func (s *dumpsterService) Create(ctx context.Context, ownerID string, req dto.Cr
 	dumpster := model.NewDumpsterFromDTO(ownerUUID, req)
 
 	if err := s.dumpsterRepo.Create(ctx, dumpster); err != nil {
+		s.logger.Error("failed to create dumpster", zap.String("ownerId", ownerID), zap.Error(err))
 		return nil, err
 	}
 
@@ -66,7 +75,10 @@ func (s *dumpsterService) GetByID(ctx context.Context, id string) (*dto.Dumpster
 	return &response, nil
 }
 
-func (s *dumpsterService) Update(ctx context.Context, ownerID, id string, req dto.UpdateDumpsterRequest) (*dto.DumpsterResponse, error) {
+func (s *dumpsterService) Update(
+	ctx context.Context,
+	ownerID, id string,
+	req dto.UpdateDumpsterRequest) (*dto.DumpsterResponse, error) {
 	dumpsterID, err := uuid.Parse(id)
 	if err != nil {
 		return nil, apperrors.BadRequest("invalid dumpster ID")
@@ -89,6 +101,7 @@ func (s *dumpsterService) Update(ctx context.Context, ownerID, id string, req dt
 	s.applyDumpsterUpdates(dumpster, req)
 
 	if err := s.dumpsterRepo.Update(ctx, dumpster); err != nil {
+		s.logger.Error("failed to update dumpster", zap.String("dumpsterId", id), zap.Error(err))
 		return nil, err
 	}
 
@@ -131,6 +144,7 @@ func (s *dumpsterService) List(ctx context.Context, req dto.DumpsterListRequest)
 			}
 			dumpsters, err := s.dumpsterRepo.FindNearby(ctx, nearbyReq)
 			if err != nil {
+				s.logger.Error("failed to find nearby dumpsters", zap.Error(err))
 				return nil, err
 			}
 			return s.buildDumpsterListResponse(dumpsters, int64(len(dumpsters)), req.Page, req.Limit), nil
@@ -139,6 +153,7 @@ func (s *dumpsterService) List(ctx context.Context, req dto.DumpsterListRequest)
 
 	dumpsters, total, err := s.dumpsterRepo.List(ctx, req)
 	if err != nil {
+		s.logger.Error("failed to list dumpsters", zap.Error(err))
 		return nil, err
 	}
 
@@ -148,6 +163,7 @@ func (s *dumpsterService) List(ctx context.Context, req dto.DumpsterListRequest)
 func (s *dumpsterService) Search(ctx context.Context, req dto.DumpsterSearchRequest) (*dto.DumpsterListResponse, error) {
 	dumpsters, total, err := s.dumpsterRepo.Search(ctx, req)
 	if err != nil {
+		s.logger.Error("failed to search dumpsters", zap.Error(err))
 		return nil, err
 	}
 
@@ -157,6 +173,7 @@ func (s *dumpsterService) Search(ctx context.Context, req dto.DumpsterSearchRequ
 func (s *dumpsterService) FindNearby(ctx context.Context, req dto.NearbyDumpstersRequest) ([]dto.DumpsterResponse, error) {
 	dumpsters, err := s.dumpsterRepo.FindNearby(ctx, req)
 	if err != nil {
+		s.logger.Error("failed to find nearby dumpsters", zap.Error(err))
 		return nil, err
 	}
 
@@ -191,7 +208,10 @@ func (s *dumpsterService) CheckAvailability(ctx context.Context, id string) (*dt
 	}, nil
 }
 
-func (s *dumpsterService) BookDumpster(ctx context.Context, userID, dumpsterID string, req dto.BookDumpsterRequest) (*dto.BookingResponse, error) {
+func (s *dumpsterService) BookDumpster(
+	ctx context.Context,
+	userID, dumpsterID string,
+	req dto.BookDumpsterRequest) (*dto.BookingResponse, error) {
 	dumpsterUUID, err := uuid.Parse(dumpsterID)
 	if err != nil {
 		return nil, apperrors.BadRequest("invalid dumpster ID")
@@ -214,14 +234,14 @@ func (s *dumpsterService) BookDumpster(ctx context.Context, userID, dumpsterID s
 	totalPrice := dumpster.PricePerDay * days
 
 	return &dto.BookingResponse{
-		ID:          uuid.New().String(),
-		DumpsterID:  dumpsterID,
-		UserID:      userID,
-		StartDate:   req.StartDate,
-		EndDate:     req.EndDate,
-		TotalPrice:  totalPrice,
-		Status:      "pending",
-		CreatedAt:   req.StartDate,
+		ID:         uuid.New().String(),
+		DumpsterID: dumpsterID,
+		UserID:     userID,
+		StartDate:  req.StartDate,
+		EndDate:    req.EndDate,
+		TotalPrice: totalPrice,
+		Status:     "pending",
+		CreatedAt:  req.StartDate,
 	}, nil
 }
 
@@ -287,7 +307,10 @@ func (s *dumpsterService) parseLocation(location string) []float64 {
 	return []float64{lat, lng}
 }
 
-func (s *dumpsterService) buildDumpsterListResponse(dumpsters []*model.Dumpster, total int64, page, limit int) *dto.DumpsterListResponse {
+func (s *dumpsterService) buildDumpsterListResponse(
+	dumpsters []*model.Dumpster,
+	total int64,
+	page, limit int) *dto.DumpsterListResponse {
 	page = max(page, 1)
 	limit = max(limit, 1)
 

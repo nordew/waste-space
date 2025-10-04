@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -35,23 +36,31 @@ type userService struct {
 	userRepo     repository.UserRepository
 	tokenService auth.TokenService
 	tokenCache   cache.TokenCache
+	logger       *zap.Logger
 }
 
-func NewUserService(userRepo repository.UserRepository, tokenService auth.TokenService, tokenCache cache.TokenCache) UserService {
+func NewUserService(
+	userRepo repository.UserRepository,
+	tokenService auth.TokenService,
+	tokenCache cache.TokenCache,
+	logger *zap.Logger) UserService {
 	return &userService{
 		userRepo:     userRepo,
 		tokenService: tokenService,
 		tokenCache:   tokenCache,
+		logger:       logger,
 	}
 }
 
 func (s *userService) Register(ctx context.Context, req dto.CreateUserRequest) (*dto.UserResponse, error) {
 	user, err := model.NewUserFromDTO(req)
 	if err != nil {
+		s.logger.Error("failed to create user from DTO", zap.Error(err))
 		return nil, err
 	}
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
+		s.logger.Error("failed to create user", zap.String("email", req.Email), zap.Error(err))
 		return nil, err
 	}
 
@@ -75,16 +84,19 @@ func (s *userService) Login(ctx context.Context, req dto.LoginRequest) (*dto.Log
 
 	tokenPair, err := s.tokenService.GenerateTokenPair(user.ID, user.Email)
 	if err != nil {
+		s.logger.Error("failed to generate tokens", zap.String("userId", user.ID.String()), zap.Error(err))
 		return nil, apperrors.Internal("failed to generate tokens", err)
 	}
 
 	if err := s.tokenCache.SetRefreshToken(ctx, user.ID, tokenPair.RefreshToken, refreshTokenTTL); err != nil {
+		s.logger.Error("failed to cache refresh token", zap.String("userId", user.ID.String()), zap.Error(err))
 		return nil, apperrors.Internal("failed to cache refresh token", err)
 	}
 
 	now := time.Now()
 	user.LastLoginAt = &now
 	if err := s.userRepo.Update(ctx, user); err != nil {
+		s.logger.Error("failed to update last login", zap.String("userId", user.ID.String()), zap.Error(err))
 		return nil, err
 	}
 
@@ -110,6 +122,7 @@ func (s *userService) RefreshToken(ctx context.Context, req dto.RefreshTokenRequ
 		if err == redis.Nil {
 			return nil, apperrors.Unauthorized("refresh token expired or revoked")
 		}
+		s.logger.Error("failed to get cached token", zap.String("userId", claims.UserID.String()), zap.Error(err))
 		return nil, apperrors.Internal("failed to get cached token", err)
 	}
 
@@ -154,7 +167,10 @@ func (s *userService) getUserByID(ctx context.Context, userID string) (*dto.User
 	return &response, nil
 }
 
-func (s *userService) UpdateMe(ctx context.Context, userID string, req dto.UpdateUserRequest) (*dto.UserResponse, error) {
+func (s *userService) UpdateMe(
+	ctx context.Context,
+	userID string,
+	req dto.UpdateUserRequest) (*dto.UserResponse, error) {
 	user, err := s.getUserForUpdate(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -163,6 +179,7 @@ func (s *userService) UpdateMe(ctx context.Context, userID string, req dto.Updat
 	s.applyUserUpdates(user, req)
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
+		s.logger.Error("failed to update user", zap.String("userId", userID), zap.Error(err))
 		return nil, err
 	}
 
@@ -170,7 +187,10 @@ func (s *userService) UpdateMe(ctx context.Context, userID string, req dto.Updat
 	return &response, nil
 }
 
-func (s *userService) UpdateEmail(ctx context.Context, userID string, req dto.UpdateEmailRequest) (*dto.UserResponse, error) {
+func (s *userService) UpdateEmail(
+	ctx context.Context,
+	userID string,
+	req dto.UpdateEmailRequest) (*dto.UserResponse, error) {
 	user, err := s.getUserForUpdate(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -180,6 +200,7 @@ func (s *userService) UpdateEmail(ctx context.Context, userID string, req dto.Up
 	user.IsEmailVerified = false
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
+		s.logger.Error("failed to update email", zap.String("userId", userID), zap.Error(err))
 		return nil, err
 	}
 
@@ -187,7 +208,10 @@ func (s *userService) UpdateEmail(ctx context.Context, userID string, req dto.Up
 	return &response, nil
 }
 
-func (s *userService) UpdatePhone(ctx context.Context, userID string, req dto.UpdatePhoneRequest) (*dto.UserResponse, error) {
+func (s *userService) UpdatePhone(
+	ctx context.Context,
+	userID string,
+	req dto.UpdatePhoneRequest) (*dto.UserResponse, error) {
 	user, err := s.getUserForUpdate(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -197,6 +221,7 @@ func (s *userService) UpdatePhone(ctx context.Context, userID string, req dto.Up
 	user.IsPhoneVerified = false
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
+		s.logger.Error("failed to update phone", zap.String("userId", userID), zap.Error(err))
 		return nil, err
 	}
 
@@ -204,7 +229,10 @@ func (s *userService) UpdatePhone(ctx context.Context, userID string, req dto.Up
 	return &response, nil
 }
 
-func (s *userService) UpdatePassword(ctx context.Context, userID string, req dto.UpdatePasswordRequest) error {
+func (s *userService) UpdatePassword(
+	ctx context.Context,
+	userID string,
+	req dto.UpdatePasswordRequest) error {
 	user, err := s.getUserForUpdate(ctx, userID)
 	if err != nil {
 		return err
@@ -216,12 +244,18 @@ func (s *userService) UpdatePassword(ctx context.Context, userID string, req dto
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
+		s.logger.Error("failed to hash password", zap.String("userId", userID), zap.Error(err))
 		return apperrors.Internal("failed to hash password", err)
 	}
 
 	user.PasswordHash = string(hashedPassword)
 
-	return s.userRepo.Update(ctx, user)
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		s.logger.Error("failed to update password", zap.String("userId", userID), zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 func (s *userService) DeleteMe(ctx context.Context, userID string) error {

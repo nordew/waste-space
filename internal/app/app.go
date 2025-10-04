@@ -21,6 +21,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pressly/goose/v3"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -66,6 +67,11 @@ func New() (*App, error) {
 		return nil, fmt.Errorf("failed to connect to redis: %w", err)
 	}
 
+	logger, err := zap.NewProduction()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize logger: %w", err)
+	}
+
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(middleware.Logger())
@@ -73,11 +79,15 @@ func New() (*App, error) {
 	tokenService := auth.NewJWTService(cfg.JWT.Secret)
 	tokenCache := cache.NewTokenCache(redisClient)
 	userRepo := repository.NewUserRepository(database)
-	userService := service.NewUserService(userRepo, tokenService, tokenCache)
+	userService := service.NewUserService(userRepo, tokenService, tokenCache, logger)
 	dumpsterRepo := repository.NewDumpsterRepository(database)
-	dumpsterService := service.NewDumpsterService(dumpsterRepo)
+	dumpsterService := service.NewDumpsterService(dumpsterRepo, logger)
+	reviewRepo := repository.NewReviewRepository(database)
+	reviewService := service.NewReviewService(reviewRepo, dumpsterRepo, logger)
+	usageRepo := repository.NewUsageRepository(database)
+	usageService := service.NewUsageService(usageRepo, dumpsterRepo, logger)
 
-	handler := v1.NewHandler(userService, dumpsterService, tokenService)
+	handler := v1.NewHandler(userService, dumpsterService, reviewService, usageService, tokenService)
 	handler.InitRoutes(router)
 
 	server := &http.Server{

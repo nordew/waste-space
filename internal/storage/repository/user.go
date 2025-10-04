@@ -92,7 +92,9 @@ func (r *userRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *userRepository) List(ctx context.Context, limit, offset int) ([]*model.User, error) {
+func (r *userRepository) List(
+	ctx context.Context,
+	limit, offset int) ([]*model.User, error) {
 	var users []*model.User
 	result := r.db.WithContext(ctx).
 		Order("created_at DESC").
